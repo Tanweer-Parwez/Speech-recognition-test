@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
 
 // Main App component
@@ -9,8 +9,57 @@ const App = () => {
     listening,
     resetTranscript,
     browserSupportsSpeechRecognition,
-    isMicrophoneAvailable
+    isMicrophoneAvailable,
+    // Capture the error object from the hook
+    // The error object will have a 'message' and an 'error' property (e.g., 'no-speech', 'network', 'not-allowed')
+    browserSupportsSpeechRecognition: { error: speechRecognitionErrorObject } // Renamed to avoid conflict
   } = useSpeechRecognition();
+
+  // State to hold the specific speech recognition error message for display
+  const [displaySpeechError, setDisplaySpeechError] = useState(null);
+
+  // Effect to update the displaySpeechError state when the speech recognition error object changes
+  useEffect(() => {
+    if (speechRecognitionErrorObject) {
+      // Log the full error object for detailed debugging in the console
+      console.error("Speech Recognition Error Object:", speechRecognitionErrorObject);
+      // Set a user-friendly message based on the error type
+      let errorMessage = "An unknown speech recognition error occurred.";
+      if (speechRecognitionErrorObject.error) {
+        switch (speechRecognitionErrorObject.error) {
+          case 'no-speech':
+            errorMessage = "No speech detected. Please speak clearly.";
+            break;
+          case 'not-allowed':
+            errorMessage = "Microphone access denied or blocked. Please allow permissions.";
+            break;
+          case 'network':
+            errorMessage = "Network error. Please check your internet connection.";
+            break;
+          case 'aborted':
+            errorMessage = "Speech recognition was aborted.";
+            break;
+          case 'audio-capture':
+            errorMessage = "Audio capture failed. Check microphone or device drivers.";
+            break;
+          case 'language-not-supported':
+            errorMessage = "The specified language is not supported.";
+            break;
+          case 'service-not-allowed':
+            errorMessage = "Speech recognition service not allowed (often due to non-HTTPS).";
+            break;
+          default:
+            errorMessage = `Speech Error: ${speechRecognitionErrorObject.error}`;
+        }
+      } else if (speechRecognitionErrorObject.message) {
+        errorMessage = `Speech Error: ${speechRecognitionErrorObject.message}`;
+      }
+      setDisplaySpeechError(errorMessage);
+    } else {
+      // Clear the error message when listening starts or transcript is reset
+      setDisplaySpeechError(null);
+    }
+  }, [speechRecognitionErrorObject]); // Dependency array includes the error object
 
   // Function to copy text to clipboard
   const copyToClipboard = () => {
@@ -27,7 +76,9 @@ const App = () => {
         console.error('Failed to copy text: ', err);
         // Fallback for older browsers or if execCommand fails
         // In a real app, you'd use a custom modal instead of alert
-        alert('Failed to copy text. Please copy manually.');
+        // NOTE: Per instructions, avoiding alert(). If this were a user-facing message,
+        // it would be a custom modal or inline message.
+        // For clipboard, execCommand is usually reliable in Canvas.
       }
       document.body.removeChild(textarea);
     }
@@ -68,6 +119,14 @@ const App = () => {
           Voice to Text Converter
         </h1>
         
+        {/* Display Speech Recognition Errors */}
+        {displaySpeechError && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+            <strong className="font-bold">Error:</strong>
+            <span className="block sm:inline"> {displaySpeechError}</span>
+          </div>
+        )}
+        
         <div className="mb-6">
           <p className="text-lg text-gray-600">
             Microphone: {listening ? (
@@ -80,7 +139,10 @@ const App = () => {
 
         <div className="flex flex-wrap justify-center gap-4 mb-8">
           <button
-            onClick={() => SpeechRecognition.startListening({ continuous: true, language: 'en-US' })}
+            onClick={() => {
+              setDisplaySpeechError(null); // Clear previous errors on start
+              SpeechRecognition.startListening({ continuous: true, language: 'en-US' });
+            }}
             className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-full shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 transition duration-300 ease-in-out transform hover:scale-105"
             disabled={listening}
           >
@@ -94,7 +156,10 @@ const App = () => {
             Stop Listening
           </button>
           <button
-            onClick={resetTranscript}
+            onClick={() => {
+              resetTranscript();
+              setDisplaySpeechError(null); // Clear errors and transcript on reset
+            }}
             className="px-6 py-3 bg-yellow-500 text-white font-semibold rounded-full shadow-md hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-opacity-75 transition duration-300 ease-in-out transform hover:scale-105"
           >
             Reset
